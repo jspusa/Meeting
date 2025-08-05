@@ -99,6 +99,8 @@
           <button type="button" class="duration-btn" data-minutes="30">30分鐘</button>
           <button type="button" class="duration-btn" data-minutes="45">45分鐘</button>
           <button type="button" class="duration-btn" data-minutes="60">60分鐘</button>
+          <button type="button" class="duration-btn" data-minutes="90">90分鐘</button>
+          <button type="button" class="duration-btn" data-minutes="120">120分鐘</button>
         </div>
       </div>
       <div class="field">
@@ -152,32 +154,37 @@
     // 資料存取
     function loadBookings(){ const d=localStorage.getItem('meetings'); return d?JSON.parse(d):[]; }
     function saveBookings(bs){ localStorage.setItem('meetings',JSON.stringify(bs)); }
+    function loadPast(){ const d=localStorage.getItem('pastMeetings'); return d?JSON.parse(d):[]; }
+    function savePast(bs){ localStorage.setItem('pastMeetings',JSON.stringify(bs)); }
     function hasConflict(bs, nb){ return bs.some(b=>
       b.office===nb.office && b.room===nb.room && b.date===nb.date &&
       !(nb.endTime<=b.startTime||nb.startTime>=b.endTime)
     ); }
-    function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), pastTbody=document.querySelector('#pastTable tbody'), bs=loadBookings();
+    function archivePast(){ const today=new Date().toISOString().slice(0,10); const bs=loadBookings(); if(!bs.length) return; const upcoming=[], past=loadPast(); bs.forEach(b=>{ (b.date<today?past:upcoming).push(b); }); if(upcoming.length!==bs.length){ saveBookings(upcoming); savePast(past); } }
+    function renderTables(){ archivePast(); const tbody=document.querySelector('#bookingTable tbody'), pastTbody=document.querySelector('#pastTable tbody'), bs=loadBookings(), pastBs=loadPast();
       const office=document.getElementById('office').value;
-      const today=new Date().toISOString().slice(0,10);
-      const entries=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      const upcoming=entries.filter(e=>e.b.date>=today);
-      const past=entries.filter(e=>e.b.date<today);
+      const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
+      const past=pastBs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
       if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="8" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         tbody.innerHTML=upcoming.map(e=>`<tr>
           <td>${e.b.office==='huashan'?'華山辦公室':'三重辦公室'}</td>
           <td>${e.b.room}</td><td>${e.b.date}</td><td>${e.b.startTime}</td><td>${e.b.endTime}</td><td>${e.b.subject}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
+          <td><button class="del-btn" data-type="upcoming" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
       if(!past.length){ pastTbody.innerHTML='<tr><td colspan="8" class="muted">無過往會議</td></tr>'; } else {
         past.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         pastTbody.innerHTML=past.map(e=>`<tr>
           <td>${e.b.office==='huashan'?'華山辦公室':'三重辦公室'}</td>
           <td>${e.b.room}</td><td>${e.b.date}</td><td>${e.b.startTime}</td><td>${e.b.endTime}</td><td>${e.b.subject}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
+          <td><button class="del-btn" data-type="past" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',()=>{
-        const idx=+btn.dataset.idx; const list=loadBookings(); list.splice(idx,1); saveBookings(list); renderTables();
+        if(!confirm('確定刪除？')) return;
+        const idx=+btn.dataset.idx;
+        if(btn.dataset.type==='upcoming'){ const list=loadBookings(); list.splice(idx,1); saveBookings(list); }
+        else { const list=loadPast(); list.splice(idx,1); savePast(list); }
+        renderTables();
       })); }
 
     // 表單事件
