@@ -31,6 +31,20 @@
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
+    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(7,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
+    .day-header, .time-cell, .slot { background:#fff; display:flex; align-items:center; justify-content:center; }
+    .day-header { background:#f3f6fb; font-weight:700; }
+    .time-cell { background:#f3f6fb; justify-content:flex-end; padding-right:8px; font-weight:400; }
+    .slot { font-size:12px; cursor:pointer; }
+    .booked { background: var(--primary); color:#fff; cursor:default; }
+    .selected { background:#b3d4fc; }
+    .legend { max-width:900px; margin:8px auto; display:flex; align-items:center; gap:12px; font-size:14px; }
+    .legend-item { display:flex; align-items:center; gap:4px; }
+    .legend-box { width:12px; height:12px; border:1px solid #e6e6e6; }
+    .cal-overlay, .time-overlay, .subject-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
+    .cal-panel, .time-panel, .subject-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
+    .subject-panel button { display:block; width:100%; margin:4px 0; padding:8px 12px; border:1px solid #cfe0ff; border-radius:6px; background:#eef4ff; color:#2d5bd1; font-size:16px; cursor:pointer; }
+    .subject-panel button:hover { background:#dfeaff; }
     .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
     .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -71,7 +85,10 @@
     <div class="row-2">
       <div class="field">
         <div class="label">會議主題</div>
-        <input type="text" id="subject" placeholder="輸入會議主題">
+        <div class="input-group">
+          <input type="text" id="subject" placeholder="輸入會議主題">
+          <button type="button" class="picker-btn subject-picker-btn" data-target="subject">📖</button>
+        </div>
       </div>
       <div></div>
     </div>
@@ -138,6 +155,13 @@
     </div>
   </div>
 
+  <div class="legend">
+    <div class="legend-item"><span class="legend-box" style="background:#2ecc71"></span>行銷週會</div>
+    <div class="legend-item"><span class="legend-box" style="background:#e74c3c"></span>產銷會議</div>
+    <div class="legend-item"><span class="legend-box" style="background:#e67e22"></span>AMZ補貨會議</div>
+  </div>
+  <div id="weekView"></div>
+
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
     <div class="cal-panel" role="dialog">
@@ -156,6 +180,15 @@
       <span>:</span>
       <select id="minTenSel"></select>
       <select id="minOneSel"></select>
+    </div>
+  </div>
+
+  <!-- 主題快速選擇覆蓋層 -->
+  <div class="subject-overlay" id="subjectOverlay">
+    <div class="subject-panel">
+      <button type="button" data-subject="行銷週會">行銷週會</button>
+      <button type="button" data-subject="產銷會議">產銷會議</button>
+      <button type="button" data-subject="AMZ補貨會議">AMZ補貨會議</button>
     </div>
   </div>
 
@@ -195,7 +228,113 @@
         if(!confirm('確定刪除？')) return;
         await deleteBooking(btn.dataset.type,+btn.dataset.idx);
         await renderTables();
+        await renderWeekView();
       })); }
+
+    const presetColors={'行銷週會':'#2ecc71','產銷會議':'#e74c3c','AMZ補貨會議':'#e67e22'};
+    const extraColors=['#3498db','#9b59b6','#1abc9c','#f1c40f','#7f8c8d'];
+    const subjectColorMap={};
+    let extraIdx=0;
+    function colorForSubject(s){
+      if(presetColors[s]) return presetColors[s];
+      if(!subjectColorMap[s]){ subjectColorMap[s]=extraColors[extraIdx % extraColors.length]; extraIdx++; }
+      return subjectColorMap[s];
+    }
+    let selectedSlots=[];
+    function handleSlotClick(cell){
+      if(cell.classList.contains('booked')) return;
+      const date=cell.dataset.date;
+      if(selectedSlots.length && selectedSlots[0].dataset.date!==date){
+        selectedSlots.forEach(c=>c.classList.remove('selected'));
+        selectedSlots=[];
+      }
+      if(cell.classList.contains('selected')){
+        cell.classList.remove('selected');
+        selectedSlots=selectedSlots.filter(c=>c!==cell);
+      }else{
+        cell.classList.add('selected');
+        selectedSlots.push(cell);
+      }
+      if(selectedSlots.length){
+        const mins=selectedSlots.map(c=>{const [h,m]=c.dataset.time.split(':').map(Number);return h*60+m;});
+        const start=Math.min(...mins), end=Math.max(...mins)+30;
+        const startStr=`${String(Math.floor(start/60)).padStart(2,'0')}:${String(start%60).padStart(2,'0')}`;
+        const endStr=`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`;
+        document.getElementById('date').value=date;
+        document.getElementById('startTime').value=startStr;
+        document.getElementById('endTime').value=endStr;
+      }
+    }
+
+    async function renderWeekView(){
+      const wrap=document.getElementById('weekView');
+      const office=document.getElementById('office').value;
+      const room=document.getElementById('room').value;
+      const bs=(await loadBookings()).filter(b=>b.office===office && b.room===room);
+      const pad=n=>String(n).padStart(2,'0');
+      const days=['週一','週二','週三','週四','週五','週六','週日'];
+      const now=new Date();
+      const day=now.getDay();
+      const monday=new Date(now);
+      monday.setDate(now.getDate()-((day+6)%7));
+      const next=new Date(monday); next.setDate(monday.getDate()+7);
+      wrap.innerHTML='';
+      selectedSlots=[];
+      [monday,next].forEach((start,idx)=>{
+        const title=document.createElement('h3');
+        title.textContent=idx===0?'本週':'下週';
+        wrap.appendChild(title);
+        const table=document.createElement('div');
+        table.className='timetable';
+        // 左上空白
+        table.appendChild(document.createElement('div'));
+        // 星期標題
+        for(let d=0;d<7;d++){
+          const date=new Date(start); date.setDate(start.getDate()+d);
+          const head=document.createElement('div');
+          head.className='day-header';
+          head.textContent=`${days[d]} ${pad(date.getMonth()+1)}/${pad(date.getDate())}`;
+          table.appendChild(head);
+        }
+        // 時間與時段格
+        for(let t=0;t<=20;t++){
+          const hh=8+Math.floor(t/2); const mm=t%2?30:0;
+          const timeStr=`${pad(hh)}:${pad(mm)}`;
+          const timeCell=document.createElement('div');
+          timeCell.className='time-cell';
+          timeCell.textContent=timeStr;
+          table.appendChild(timeCell);
+          for(let d=0;d<7;d++){
+            const date=new Date(start); date.setDate(start.getDate()+d);
+            const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+            const cell=document.createElement('div');
+            cell.className='slot';
+            cell.dataset.date=dateStr;
+            cell.dataset.time=timeStr;
+            cell.addEventListener('click',()=>handleSlotClick(cell));
+            table.appendChild(cell);
+          }
+        }
+        // 標記預約
+        bs.forEach(b=>{
+          const [sh,sm]=b.startTime.split(':').map(Number);
+          const [eh,em]=b.endTime.split(':').map(Number);
+          const sMin=sh*60+sm, eMin=eh*60+em;
+          table.querySelectorAll(`.slot[data-date="${b.date}"]`).forEach(cell=>{
+            const [ch,cm]=cell.dataset.time.split(':').map(Number);
+            const cMin=ch*60+cm;
+            if(cMin<eMin && cMin+30>sMin){
+              cell.classList.add('booked');
+              const color=colorForSubject(b.subject);
+              cell.style.background=color;
+              cell.style.color='#fff';
+              cell.textContent=b.subject;
+            }
+          });
+        });
+        wrap.appendChild(table);
+      });
+    }
 
     // 表單事件
     const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg'), status=document.getElementById('statusMsg');
@@ -215,11 +354,13 @@
         const keepOffice=form.office.value;
         status.textContent='';
         await renderTables();
+        await renderWeekView();
         form.reset();
         form.office.value=keepOffice;
     });
-    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); });
-    document.getElementById('office').addEventListener('change',()=>{ renderTables(); });
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); renderWeekView(); });
+    document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
+    document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
     document.getElementById('pastToggle').addEventListener('click',()=>{
       const box=document.getElementById('pastContent');
       box.style.display=box.style.display==='none'?'block':'none';
@@ -228,6 +369,7 @@
     // 日期／時間選擇器共用
     const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
     const timeOverlay=document.getElementById('timeOverlay'), hourSel=document.getElementById('hourSel'), minTenSel=document.getElementById('minTenSel'), minOneSel=document.getElementById('minOneSel');
+    const subjectOverlay=document.getElementById('subjectOverlay');
     let activeDateInput=null, activeTimeInput=null, viewY, viewM;
     // 初始化時間下拉
       function buildTime(){
@@ -259,9 +401,12 @@
     function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; }
     timeOverlay.addEventListener('click',e=>{ if(e.target===timeOverlay) closeTime(); });
     hourSel.addEventListener('change',updateTime); minTenSel.addEventListener('change',updateTime); minOneSel.addEventListener('change',()=>{ updateTime(); closeTime(); });
+    subjectOverlay.addEventListener('click',e=>{ if(e.target===subjectOverlay) subjectOverlay.style.display='none'; });
+    subjectOverlay.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{ document.getElementById('subject').value=btn.dataset.subject; subjectOverlay.style.display='none'; }));
     // 綁定按鈕
     document.querySelectorAll('.date-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openCalendar(btn.dataset.target)));
     document.querySelectorAll('.time-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openTime(btn.dataset.target)));
+    document.querySelectorAll('.subject-picker-btn').forEach(btn=>btn.addEventListener('click',()=>{ subjectOverlay.style.display='flex'; }));
     // 快選時長
     document.querySelectorAll('.duration-btn').forEach(btn=>btn.addEventListener('click',()=>{
       const mins=+btn.dataset.minutes; const start=document.getElementById('startTime').value;
@@ -270,6 +415,7 @@
       document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }));
     renderTables();
+    renderWeekView();
   })();
   </script>
 </body>
