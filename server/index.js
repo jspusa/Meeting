@@ -1,12 +1,10 @@
-const express = require('express');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 
-const app = express();
 const DATA_FILE = path.join(__dirname, 'bookings.json');
 const INDEX_FILE = path.join(__dirname, '..', 'index.html');
-
-app.use(express.json());
 
 function readData() {
   try {
@@ -30,59 +28,77 @@ function archivePast(data) {
   data.bookings = upcoming;
 }
 
-app.get('/', (req, res) => {
-  res.sendFile(INDEX_FILE);
-});
+function sendJSON(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(obj));
+}
 
-app.get('/api/bookings', (req, res) => {
-  const data = readData();
-  archivePast(data);
-  writeData(data);
-  res.json(data.bookings);
-});
+const server = http.createServer((req, res) => {
+  const parsed = url.parse(req.url, true);
 
-app.get('/api/past', (req, res) => {
-  const data = readData();
-  res.json(data.past);
-});
-
-app.post('/api/bookings', (req, res) => {
-  const booking = req.body;
-  const data = readData();
-  const conflict = data.bookings.some(b =>
-    b.office === booking.office &&
-    b.room === booking.room &&
-    b.date === booking.date &&
-    !(booking.endTime <= b.startTime || booking.startTime >= b.endTime)
-  );
-  if (conflict) return res.status(400).json({ error: 'Conflict' });
-  data.bookings.push(booking);
-  writeData(data);
-  res.status(201).json(booking);
-});
-
-app.delete('/api/bookings/:idx', (req, res) => {
-  const idx = parseInt(req.params.idx, 10);
-  const data = readData();
-  if (idx >= 0 && idx < data.bookings.length) {
-    data.bookings.splice(idx, 1);
-    writeData(data);
-    return res.status(204).end();
+  // Serve frontend
+  if (req.method === 'GET' && parsed.pathname === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    fs.createReadStream(INDEX_FILE).pipe(res);
+    return;
   }
-  res.status(404).end();
-});
 
-app.delete('/api/past/:idx', (req, res) => {
-  const idx = parseInt(req.params.idx, 10);
-  const data = readData();
-  if (idx >= 0 && idx < data.past.length) {
-    data.past.splice(idx, 1);
+  if (req.method === 'GET' && parsed.pathname === '/api/bookings') {
+    const data = readData();
+    archivePast(data);
     writeData(data);
-    return res.status(204).end();
+    return sendJSON(res, 200, data.bookings);
   }
-  res.status(404).end();
+
+  if (req.method === 'GET' && parsed.pathname === '/api/past') {
+    const data = readData();
+    return sendJSON(res, 200, data.past);
+  }
+
+  if (req.method === 'POST' && parsed.pathname === '/api/bookings') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const booking = JSON.parse(body || '{}');
+        const data = readData();
+        const conflict = data.bookings.some(b =>
+          b.office === booking.office &&
+          b.room === booking.room &&
+          b.date === booking.date &&
+          !(booking.endTime <= b.startTime || booking.startTime >= b.endTime)
+        );
+        if (conflict) return sendJSON(res, 400, { error: 'Conflict' });
+        data.bookings.push(booking);
+        writeData(data);
+        return sendJSON(res, 201, booking);
+      } catch {
+        return sendJSON(res, 400, { error: 'Bad JSON' });
+      }
+    });
+    return;
+  }
+
+  const delMatch = parsed.pathname.match(/^\/api\/(bookings|past)\/(\d+)$/);
+  if (req.method === 'DELETE' && delMatch) {
+    const type = delMatch[1];
+    const idx = parseInt(delMatch[2], 10);
+    const data = readData();
+    const list = type === 'bookings' ? data.bookings : data.past;
+    if (idx >= 0 && idx < list.length) {
+      list.splice(idx, 1);
+      writeData(data);
+      res.writeHead(204).end();
+    } else {
+      res.writeHead(404).end();
+    }
+    return;
+  }
+
+  res.writeHead(404).end();
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
-
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
