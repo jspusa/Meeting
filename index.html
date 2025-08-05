@@ -31,6 +31,15 @@
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
+    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(7,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
+    .day-header, .time-cell, .slot { background:#fff; display:flex; align-items:center; justify-content:center; }
+    .day-header { background:#f3f6fb; font-weight:700; }
+    .time-cell { background:#f3f6fb; justify-content:flex-end; padding-right:8px; font-weight:400; }
+    .slot { font-size:12px; }
+    .booked { background: var(--primary); color:#fff; }
+    .legend { max-width:900px; margin:8px auto; display:flex; align-items:center; gap:6px; font-size:14px; }
+    .legend-box { width:12px; height:12px; border:1px solid #e6e6e6; }
+    .legend-booked { background: var(--primary); }
     .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
     .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -138,6 +147,9 @@
     </div>
   </div>
 
+  <div class="legend"><span class="legend-box legend-booked"></span>已預約</div>
+  <div id="weekView"></div>
+
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
     <div class="cal-panel" role="dialog">
@@ -195,7 +207,73 @@
         if(!confirm('確定刪除？')) return;
         await deleteBooking(btn.dataset.type,+btn.dataset.idx);
         await renderTables();
+        await renderWeekView();
       })); }
+
+    async function renderWeekView(){
+      const wrap=document.getElementById('weekView');
+      const office=document.getElementById('office').value;
+      const room=document.getElementById('room').value;
+      const bs=(await loadBookings()).filter(b=>b.office===office && b.room===room);
+      const pad=n=>String(n).padStart(2,'0');
+      const days=['週一','週二','週三','週四','週五','週六','週日'];
+      const now=new Date();
+      const day=now.getDay();
+      const monday=new Date(now);
+      monday.setDate(now.getDate()-((day+6)%7));
+      const next=new Date(monday); next.setDate(monday.getDate()+7);
+      wrap.innerHTML='';
+      [monday,next].forEach((start,idx)=>{
+        const title=document.createElement('h3');
+        title.textContent=idx===0?'本週':'下週';
+        wrap.appendChild(title);
+        const table=document.createElement('div');
+        table.className='timetable';
+        // 左上空白
+        table.appendChild(document.createElement('div'));
+        // 星期標題
+        for(let d=0;d<7;d++){
+          const date=new Date(start); date.setDate(start.getDate()+d);
+          const head=document.createElement('div');
+          head.className='day-header';
+          head.textContent=`${days[d]} ${pad(date.getMonth()+1)}/${pad(date.getDate())}`;
+          table.appendChild(head);
+        }
+        // 時間與時段格
+        for(let t=0;t<=20;t++){
+          const hh=8+Math.floor(t/2); const mm=t%2?30:0;
+          const timeStr=`${pad(hh)}:${pad(mm)}`;
+          const timeCell=document.createElement('div');
+          timeCell.className='time-cell';
+          timeCell.textContent=timeStr;
+          table.appendChild(timeCell);
+          for(let d=0;d<7;d++){
+            const date=new Date(start); date.setDate(start.getDate()+d);
+            const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+            const cell=document.createElement('div');
+            cell.className='slot';
+            cell.dataset.date=dateStr;
+            cell.dataset.time=timeStr;
+            table.appendChild(cell);
+          }
+        }
+        // 標記預約
+        bs.forEach(b=>{
+          const [sh,sm]=b.startTime.split(':').map(Number);
+          const [eh,em]=b.endTime.split(':').map(Number);
+          const sMin=sh*60+sm, eMin=eh*60+em;
+          table.querySelectorAll(`.slot[data-date="${b.date}"]`).forEach(cell=>{
+            const [ch,cm]=cell.dataset.time.split(':').map(Number);
+            const cMin=ch*60+cm;
+            if(cMin<eMin && cMin+30>sMin){
+              cell.classList.add('booked');
+              cell.textContent=b.organizer;
+            }
+          });
+        });
+        wrap.appendChild(table);
+      });
+    }
 
     // 表單事件
     const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg'), status=document.getElementById('statusMsg');
@@ -215,11 +293,13 @@
         const keepOffice=form.office.value;
         status.textContent='';
         await renderTables();
+        await renderWeekView();
         form.reset();
         form.office.value=keepOffice;
     });
-    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); });
-    document.getElementById('office').addEventListener('change',()=>{ renderTables(); });
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); renderWeekView(); });
+    document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
+    document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
     document.getElementById('pastToggle').addEventListener('click',()=>{
       const box=document.getElementById('pastContent');
       box.style.display=box.style.display==='none'?'block':'none';
@@ -270,6 +350,7 @@
       document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }));
     renderTables();
+    renderWeekView();
   })();
   </script>
 </body>
