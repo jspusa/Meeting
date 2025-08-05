@@ -27,6 +27,7 @@
     .duration-btn { background: #eef4ff; color: #2d5bd1; border:1px solid #cfe0ff; }
     .duration-btn:hover { background: #dfeaff; }
     .error { color: #e74c3c; font-weight: 700; text-align: center; margin-top: 6px; }
+    .status { color: #2d5bd1; font-weight: 700; text-align: center; margin-top: 6px; }
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
@@ -115,6 +116,7 @@
       <button type="submit" class="btn btn-primary">提交預約</button>
       <button type="button" id="resetBtn" class="btn btn-secondary">重置</button>
     </div>
+    <div id="statusMsg" class="status"></div>
     <div id="errorMsg" class="error"></div>
   </form>
   <table id="bookingTable">
@@ -196,8 +198,8 @@
       })); }
 
     // 表單事件
-    const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg');
-    form.addEventListener('submit',async e=>{ e.preventDefault(); err.textContent='';
+    const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg'), status=document.getElementById('statusMsg');
+    form.addEventListener('submit',async e=>{ e.preventDefault(); err.textContent=''; status.textContent='';
         const office=form.office.value, room=form.room.value, subject=form.subject.value.trim();
         const date=form.date.value, start=form.startTime.value, end=form.endTime.value;
         const org=form.organizer.value.trim();
@@ -208,13 +210,15 @@
         if(end<=start){ err.textContent='結束時間需晚於開始時間。'; return; }
         const nb={office,room,date,startTime:start,endTime:end,subject,organizer:org}, bs=await loadBookings();
         if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
-        try{ await createBooking(nb); } catch(e){ err.textContent='提交失敗，請稍後再試。'; return; }
+        status.textContent='已提交預約，請稍候系統上傳';
+        try{ await createBooking(nb); } catch(e){ status.textContent=''; err.textContent='提交失敗，請稍後再試。'; return; }
         const keepOffice=form.office.value;
+        status.textContent='';
         await renderTables();
         form.reset();
         form.office.value=keepOffice;
     });
-    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; renderTables(); });
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); });
     document.getElementById('office').addEventListener('change',()=>{ renderTables(); });
     document.getElementById('pastToggle').addEventListener('click',()=>{
       const box=document.getElementById('pastContent');
