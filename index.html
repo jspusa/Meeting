@@ -42,6 +42,8 @@
     .cal-grid .disabled { opacity: .35; cursor: default; }
     .time-panel { display: flex; gap: 8px; justify-content: center; }
     .time-panel select { padding: 8px 6px; font-size: 16px; }
+    .past-box { position: fixed; right: 20px; bottom: 20px; width: 320px; }
+    .past-box table { margin-top: 0; }
     @media (max-width: 760px) { .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -116,18 +118,22 @@
   </form>
   <table id="bookingTable">
     <thead>
-      <tr><th>辦公室</th><th>會議室</th><th>日期</th><th>開始</th><th>結束</th><th>主題</th><th>預約人</th><th>操作</th></tr>
+      <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
     </thead>
-    <tbody><tr><td colspan="8" class="muted">尚無預約</td></tr></tbody>
+    <tbody><tr><td colspan="6" class="muted">尚無預約</td></tr></tbody>
   </table>
 
-  <h3>過往會議</h3>
-  <table id="pastTable">
-    <thead>
-      <tr><th>辦公室</th><th>會議室</th><th>日期</th><th>開始</th><th>結束</th><th>主題</th><th>預約人</th><th>操作</th></tr>
-    </thead>
-    <tbody><tr><td colspan="8" class="muted">無過往會議</td></tr></tbody>
-  </table>
+  <div class="past-box" id="pastBox">
+    <button type="button" id="pastToggle" class="btn btn-secondary" style="width:100%;">過往會議</button>
+    <div id="pastContent" style="display:none; margin-top:8px;">
+      <table id="pastTable">
+        <thead>
+          <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
+        </thead>
+        <tbody><tr><td colspan="6" class="muted">無過往會議</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
@@ -165,18 +171,18 @@
       const office=document.getElementById('office').value;
       const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
       const past=pastBs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="8" class="muted">尚無預約</td></tr>'; } else {
+      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="6" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         tbody.innerHTML=upcoming.map(e=>`<tr>
-          <td>${e.b.office==='huashan'?'華山辦公室':'三重辦公室'}</td>
-          <td>${e.b.room}</td><td>${e.b.date}</td><td>${e.b.startTime}</td><td>${e.b.endTime}</td><td>${e.b.subject}</td><td>${e.b.organizer}</td>
+          <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
+          <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
           <td><button class="del-btn" data-type="upcoming" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
-      if(!past.length){ pastTbody.innerHTML='<tr><td colspan="8" class="muted">無過往會議</td></tr>'; } else {
+      if(!past.length){ pastTbody.innerHTML='<tr><td colspan="6" class="muted">無過往會議</td></tr>'; } else {
         past.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         pastTbody.innerHTML=past.map(e=>`<tr>
-          <td>${e.b.office==='huashan'?'華山辦公室':'三重辦公室'}</td>
-          <td>${e.b.room}</td><td>${e.b.date}</td><td>${e.b.startTime}</td><td>${e.b.endTime}</td><td>${e.b.subject}</td><td>${e.b.organizer}</td>
+          <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
+          <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
           <td><button class="del-btn" data-type="past" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',()=>{
@@ -206,6 +212,10 @@
     });
     document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; renderTables(); });
     document.getElementById('office').addEventListener('change',renderTables);
+    document.getElementById('pastToggle').addEventListener('click',()=>{
+      const box=document.getElementById('pastContent');
+      box.style.display=box.style.display==='none'?'block':'none';
+    });
 
     // 日期／時間選擇器共用
     const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
