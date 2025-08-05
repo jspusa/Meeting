@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>會議室預約系統</title>
+  <style>
+    :root { --primary: #4a90e2; --bg: #f5f7fa; --radius: 10px; --pad: 12px; --ff: 'Helvetica Neue', Arial, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--ff); background: var(--bg); color: #333; padding: var(--pad); }
+    h2 { margin: 0 0 16px; color: var(--primary); text-align: center; }
+    form { max-width: 600px; margin: 0 auto 24px; background: #fff; border-radius: var(--radius); padding: var(--pad); box-shadow: 0 4px 12px rgba(0,0,0,.05); }
+    .row-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 16px; margin-bottom: 16px; }
+    .field { display: flex; flex-direction: column; }
+    .label { font-weight: 600; margin-bottom: 6px; }
+    select, input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; background: #fff; color: #333; }
+    .input-group { position: relative; display: flex; }
+    .input-group input { flex: 1; padding-right: 44px; }
+    .picker-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border:1px solid #cfe0ff; background:#eef4ff; color:#2d5bd1; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:14px; line-height:1; }
+    .picker-btn:hover { background: #dfeaff; }
+    .btn, .duration-btn { display: inline-block; padding: 8px 12px; font-size: 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 6px; margin-top: 4px; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: #357abd; }
+    .btn-secondary { background: #6c757d; color: #fff; }
+    .btn-secondary:hover { background: #5b636a; }
+    .duration-btn { background: #eef4ff; color: #2d5bd1; border:1px solid #cfe0ff; }
+    .duration-btn:hover { background: #dfeaff; }
+    .error { color: #e74c3c; font-weight: 700; text-align: center; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; background: #fff; border-radius: var(--radius); overflow: hidden; }
+    th, td { border: 1px solid #e6e6e6; padding: 8px; text-align: center; font-size: .95em; }
+    th { background: #f3f6fb; }
+    .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
+    .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
+    .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .cal-header button { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #f7f7f7; cursor: pointer; }
+    .cal-title { font-weight: 700; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; }
+    .cal-grid .dow { background: #f3f6fb; font-weight: 700; padding: 8px 0; text-align: center; }
+    .cal-grid .day { padding: 8px 0; border: 1px solid #eee; border-radius: 6px; text-align: center; cursor: pointer; }
+    .cal-grid .day:hover { background: #eef4ff; border-color: #cfe0ff; }
+    .cal-grid .disabled { opacity: .35; cursor: default; }
+    .time-panel { display: flex; gap: 8px; justify-content: center; }
+    .time-panel select { padding: 8px 6px; font-size: 16px; }
+    @media (max-width: 760px) { .row-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h2>會議室預約系統</h2>
+  <form id="bookingForm" autocomplete="off">
+    <div class="row-2">
+      <div class="field">
+        <div class="label">辦公室</div>
+        <select id="office">
+          <option value="huashan">華山辦公室</option>
+          <option value="sanchong">三重辦公室</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="label">會議室</div>
+        <select id="room">
+          <option value="大會議室">大會議室</option>
+          <option value="小會議室">小會議室</option>
+        </select>
+      </div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <div class="label">會議主題</div>
+        <input type="text" id="subject" placeholder="輸入會議主題">
+      </div>
+      <div></div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <div class="label">日期</div>
+        <div class="input-group">
+          <input type="text" id="date" placeholder="YYYY-MM-DD">
+          <button type="button" class="picker-btn date-picker-btn" data-target="date">📅</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">開始時間</div>
+        <div class="input-group">
+          <input type="text" id="startTime" placeholder="HH:MM">
+          <button type="button" class="picker-btn time-picker-btn" data-target="startTime">⏰</button>
+        </div>
+      </div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <div class="label">結束時間</div>
+        <div class="input-group">
+          <input type="text" id="endTime" placeholder="HH:MM">
+          <button type="button" class="picker-btn time-picker-btn" data-target="endTime">⏰</button>
+        </div>
+        <div>
+          <button type="button" class="duration-btn" data-minutes="15">15分鐘</button>
+          <button type="button" class="duration-btn" data-minutes="30">30分鐘</button>
+          <button type="button" class="duration-btn" data-minutes="45">45分鐘</button>
+          <button type="button" class="duration-btn" data-minutes="60">60分鐘</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">預約人</div>
+        <input type="text" id="organizer" placeholder="您的姓名">
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <button type="submit" class="btn btn-primary">提交預約</button>
+      <button type="button" id="resetBtn" class="btn btn-secondary">重置</button>
+    </div>
+    <div id="errorMsg" class="error"></div>
+  </form>
+  <table id="bookingTable">
+    <thead>
+      <tr><th>辦公室</th><th>會議室</th><th>日期</th><th>開始</th><th>結束</th><th>主題</th><th>預約人</th></tr>
+    </thead>
+    <tbody><tr><td colspan="7" class="muted">尚無預約</td></tr></tbody>
+  </table>
+
+  <!-- 日曆覆蓋層 -->
+  <div class="cal-overlay" id="calOverlay">
+    <div class="cal-panel" role="dialog">
+      <div class="cal-header">
+        <button id="calPrev">‹</button>
+        <div class="cal-title" id="calTitle">2025-08</div>
+        <button id="calNext">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+  </div>
+  <!-- 時間選擇器覆蓋層 -->
+  <div class="time-overlay" id="timeOverlay">
+    <div class="time-panel">
+      <select id="hourSel"></select>
+      <select id="minTenSel"></select>
+      <select id="minOneSel"></select>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // 資料存取
+    function loadBookings(){ const d=localStorage.getItem('meetings'); return d?JSON.parse(d):[]; }
+    function saveBookings(bs){ localStorage.setItem('meetings',JSON.stringify(bs)); }
+    function hasConflict(bs, nb){ return bs.some(b=>
+      b.office===nb.office && b.room===nb.room && b.date===nb.date &&
+      !(nb.endTime<=b.startTime||nb.startTime>=b.endTime)
+    ); }
+    function renderTable(){ const tbody=document.querySelector('#bookingTable tbody'), bs=loadBookings();
+      if(!bs.length){ tbody.innerHTML='<tr><td colspan="7" class="muted">尚無預約</td></tr>'; return; }
+      bs.sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime));
+      tbody.innerHTML=bs.map(b=>`<tr>
+        <td>${b.office==='huashan'?'華山辦公室':'三重辦公室'}</td>
+        <td>${b.room}</td><td>${b.date}</td><td>${b.startTime}</td><td>${b.endTime}</td><td>${b.subject}</td><td>${b.organizer}</td>
+      </tr>`).join(''); }
+
+    // 表單事件
+    const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg');
+    form.addEventListener('submit',e=>{ e.preventDefault(); err.textContent='';
+      const office=form.office.value, room=form.room.value, subject=form.subject.value.trim();
+      const date=form.date.value, start=form.startTime.value, end=form.endTime.value;
+      const org=form.organizer.value.trim();
+      if(!office||!room||!subject||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||!org){
+        err.textContent='請完整且正確填寫所有欄位。'; return; }
+      if(end<=start){ err.textContent='結束時間需晚於開始時間。'; return; }
+      const nb={office,room,date,startTime:start,endTime:end,subject,organizer:org}, bs=loadBookings();
+      if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
+      bs.push(nb); saveBookings(bs); renderTable(); form.reset();
+    });
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; });
+
+    // 日期／時間選擇器共用
+    const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
+    const timeOverlay=document.getElementById('timeOverlay'), hourSel=document.getElementById('hourSel'), minTenSel=document.getElementById('minTenSel'), minOneSel=document.getElementById('minOneSel');
+    let activeDateInput=null, activeTimeInput=null, viewY, viewM;
+    // 初始化時間下拉
+    function buildTime(){ hourSel.innerHTML=Array.from({length:24},(_,i)=>`<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('');
+      minTenSel.innerHTML=Array.from({length:6},(_,i)=>`<option value="${i}">${i}</option>`).join('');
+      minOneSel.innerHTML=Array.from({length:10},(_,i)=>`<option value="${i}">${i}</option>`).join(''); }
+    buildTime();
+    // 打開日曆
+    function openCalendar(id){ activeDateInput=document.getElementById(id);
+      const v=activeDateInput.value.match(/^(\d{4})-(\d{2})/), now=v?new Date(+v[1],+v[2]-1,1):new Date(); viewY=now.getFullYear(); viewM=now.getMonth(); renderCal(); calOverlay.style.display='flex'; }
+    function closeCalendar(){ calOverlay.style.display='none'; activeDateInput=null; }
+    function renderCal(){ const pad=n=>String(n).padStart(2,'0'); titleEl.textContent=`${viewY}-${pad(viewM+1)}`;
+      const first=new Date(viewY,viewM,1), last=new Date(viewY,viewM+1,0), startDow=first.getDay(), days=last.getDate();
+      let html=['日','一','二','三','四','五','六'].map(w=>`<div class="dow">${w}</div>`).join('');
+      for(let i=0;i<startDow;i++) html+=`<div class="disabled"></div>`;
+      for(let d=1;d<=days;d++) html+=`<div class="day" data-day="${d}">${d}</div>`;
+      grid.innerHTML=html;
+      document.querySelectorAll('.day').forEach(cell=>cell.addEventListener('click',()=>{
+        const d=+cell.dataset.day; activeDateInput.value=`${viewY}-${pad(viewM+1)}-${pad(d)}`; closeCalendar();
+      })); }
+    prevBtn.addEventListener('click',()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
+    nextBtn.addEventListener('click',()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
+    calOverlay.addEventListener('click',e=>{ if(e.target===calOverlay) closeCalendar(); });
+    // 打開時間選擇器
+    function openTime(id){ activeTimeInput=document.getElementById(id); const v=activeTimeInput.value.match(/^(\d{2}):(\d{2})$/);
+      if(v){ hourSel.value=v[1]; const m=+v[2]; minTenSel.value=Math.floor(m/10); minOneSel.value=m%10;} timeOverlay.style.display='flex'; }
+    function closeTime(){ timeOverlay.style.display='none'; activeTimeInput=null; }
+    function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; }
+    timeOverlay.addEventListener('click',e=>{ if(e.target===timeOverlay) closeTime(); });
+    hourSel.addEventListener('change',updateTime); minTenSel.addEventListener('change',updateTime); minOneSel.addEventListener('change',()=>{ updateTime(); closeTime(); });
+    // 綁定按鈕
+    document.querySelectorAll('.date-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openCalendar(btn.dataset.target)));
+    document.querySelectorAll('.time-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openTime(btn.dataset.target)));
+    // 快選時長
+    document.querySelectorAll('.duration-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const mins=+btn.dataset.minutes; const start=document.getElementById('startTime').value;
+      if(!/^\d{2}:\d{2}$/.test(start)) return; const [hh,mm]=start.split(':').map(n=>+n);
+      const d=new Date(); d.setHours(hh); d.setMinutes(mm+mins);
+      document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }));
+    renderTable();
+  })();
+  </script>
+</body>
+</html>
