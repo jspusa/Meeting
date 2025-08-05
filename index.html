@@ -27,8 +27,8 @@
     .duration-btn { background: #eef4ff; color: #2d5bd1; border:1px solid #cfe0ff; }
     .duration-btn:hover { background: #dfeaff; }
     .error { color: #e74c3c; font-weight: 700; text-align: center; margin-top: 6px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; background: #fff; border-radius: var(--radius); overflow: hidden; }
-    th, td { border: 1px solid #e6e6e6; padding: 8px; text-align: center; font-size: .95em; }
+    table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
+    th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
     .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
@@ -43,7 +43,7 @@
     .time-panel { display: flex; gap: 8px; justify-content: center; }
     .time-panel select { padding: 8px 6px; font-size: 16px; }
     .past-box { position: fixed; right: 20px; bottom: 20px; width: 320px; }
-    .past-box table { margin-top: 0; }
+    .past-box table { margin-top:0; width:100%; }
     @media (max-width: 760px) { .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -187,7 +187,7 @@
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',async()=>{
         if(!confirm('確定刪除？')) return;
         await deleteBooking(btn.dataset.type,+btn.dataset.idx);
-        renderTables();
+        await renderTables();
       })); }
 
     // 表單事件
@@ -203,7 +203,7 @@
       if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
       await createBooking(nb);
       const keepOffice=form.office.value;
-      renderTables();
+      await renderTables();
       form.reset();
       form.office.value=keepOffice;
     });

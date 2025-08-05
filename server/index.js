@@ -1,16 +1,14 @@
-const express = require('express');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const app = express();
-app.use(express.json());
-
 const DATA_FILE = path.join(__dirname, 'bookings.json');
+const INDEX_FILE = path.join(__dirname, '..', 'index.html');
 
 function readData() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch (err) {
+  } catch {
     return { bookings: [], past: [] };
   }
 }
@@ -29,54 +27,97 @@ function archivePast(data) {
   data.bookings = upcoming;
 }
 
-app.get('/api/bookings', (req, res) => {
-  const data = readData();
-  archivePast(data);
-  writeData(data);
-  res.json(data.bookings);
-});
+function sendJSON(res, status, payload) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
 
-app.get('/api/past', (req, res) => {
-  const data = readData();
-  res.json(data.past);
-});
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
 
-app.post('/api/bookings', (req, res) => {
-  const booking = req.body;
-  const data = readData();
-  const conflict = data.bookings.some(b =>
-    b.office === booking.office &&
-    b.room === booking.room &&
-    b.date === booking.date &&
-    !(booking.endTime <= b.startTime || booking.startTime >= b.endTime)
-  );
-  if (conflict) return res.status(400).json({ error: 'Conflict' });
-  data.bookings.push(booking);
-  writeData(data);
-  res.status(201).json(booking);
-});
-
-app.delete('/api/bookings/:idx', (req, res) => {
-  const idx = parseInt(req.params.idx, 10);
-  const data = readData();
-  if (idx >= 0 && idx < data.bookings.length) {
-    data.bookings.splice(idx, 1);
-    writeData(data);
-    return res.sendStatus(204);
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    fs.readFile(INDEX_FILE, (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Server error');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(data);
+      }
+    });
+    return;
   }
-  res.sendStatus(404);
-});
 
-app.delete('/api/past/:idx', (req, res) => {
-  const idx = parseInt(req.params.idx, 10);
-  const data = readData();
-  if (idx >= 0 && idx < data.past.length) {
-    data.past.splice(idx, 1);
+  if (req.method === 'GET' && url.pathname === '/api/bookings') {
+    const data = readData();
+    archivePast(data);
     writeData(data);
-    return res.sendStatus(204);
+    return sendJSON(res, 200, data.bookings);
   }
-  res.sendStatus(404);
+
+  if (req.method === 'GET' && url.pathname === '/api/past') {
+    const data = readData();
+    return sendJSON(res, 200, data.past);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/bookings') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      let booking;
+      try {
+        booking = JSON.parse(body);
+      } catch {
+        return sendJSON(res, 400, { error: 'Invalid JSON' });
+      }
+      const data = readData();
+      const conflict = data.bookings.some(b =>
+        b.office === booking.office &&
+        b.room === booking.room &&
+        b.date === booking.date &&
+        !(booking.endTime <= b.startTime || booking.startTime >= b.endTime)
+      );
+      if (conflict) return sendJSON(res, 400, { error: 'Conflict' });
+      data.bookings.push(booking);
+      writeData(data);
+      sendJSON(res, 201, booking);
+    });
+    return;
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/api/bookings/')) {
+    const idx = parseInt(url.pathname.split('/').pop(), 10);
+    const data = readData();
+    if (idx >= 0 && idx < data.bookings.length) {
+      data.bookings.splice(idx, 1);
+      writeData(data);
+      res.writeHead(204);
+      res.end();
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+    return;
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/api/past/')) {
+    const idx = parseInt(url.pathname.split('/').pop(), 10);
+    const data = readData();
+    if (idx >= 0 && idx < data.past.length) {
+      data.past.splice(idx, 1);
+      writeData(data);
+      res.writeHead(204);
+      res.end();
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+    return;
+  }
+
+  res.writeHead(404);
+  res.end('Not found');
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
