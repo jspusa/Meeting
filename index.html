@@ -31,6 +31,12 @@
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
+    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(11,40px); gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
+    .slot { background:#fff; }
+    .booked { background: var(--primary); color:#fff; }
+    .legend { max-width:900px; margin:8px auto; display:flex; align-items:center; gap:6px; font-size:14px; }
+    .legend-box { width:12px; height:12px; border:1px solid #e6e6e6; }
+    .legend-booked { background: var(--primary); }
     .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
     .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -138,6 +144,9 @@
     </div>
   </div>
 
+  <div class="legend"><span class="legend-box legend-booked"></span>已預約</div>
+  <div id="weekView"></div>
+
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
     <div class="cal-panel" role="dialog">
@@ -195,7 +204,40 @@
         if(!confirm('確定刪除？')) return;
         await deleteBooking(btn.dataset.type,+btn.dataset.idx);
         await renderTables();
+        await renderWeekView();
       })); }
+
+    async function renderWeekView(){
+      const wrap=document.getElementById('weekView');
+      const office=document.getElementById('office').value;
+      const bs=(await loadBookings()).filter(b=>b.office===office);
+      const pad=n=>String(n).padStart(2,'0');
+      const now=new Date();
+      const day=now.getDay();
+      const monday=new Date(now);
+      monday.setDate(now.getDate()-((day+6)%7));
+      const next=new Date(monday); next.setDate(monday.getDate()+7);
+      wrap.innerHTML='';
+      [monday,next].forEach((start,idx)=>{
+        const title=document.createElement('h3');
+        title.textContent=idx===0?'本週':'下週';
+        wrap.appendChild(title);
+        const grid=document.createElement('div');
+        grid.className='timetable';
+        for(let h=8;h<=18;h++){
+          for(let d=0;d<7;d++){
+            const cell=document.createElement('div');
+            cell.className='slot';
+            const date=new Date(start); date.setDate(start.getDate()+d);
+            const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+            const slotStart=`${pad(h)}:00`, slotEnd=`${pad(h+1)}:00`;
+            if(bs.some(b=>b.date===dateStr && !(b.endTime<=slotStart||b.startTime>=slotEnd))) cell.classList.add('booked');
+            grid.appendChild(cell);
+          }
+        }
+        wrap.appendChild(grid);
+      });
+    }
 
     // 表單事件
     const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg'), status=document.getElementById('statusMsg');
@@ -215,11 +257,12 @@
         const keepOffice=form.office.value;
         status.textContent='';
         await renderTables();
+        await renderWeekView();
         form.reset();
         form.office.value=keepOffice;
     });
-    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); });
-    document.getElementById('office').addEventListener('change',()=>{ renderTables(); });
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); renderWeekView(); });
+    document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
     document.getElementById('pastToggle').addEventListener('click',()=>{
       const box=document.getElementById('pastContent');
       box.style.display=box.style.display==='none'?'block':'none';
@@ -270,6 +313,7 @@
       document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }));
     renderTables();
+    renderWeekView();
   })();
   </script>
 </body>
