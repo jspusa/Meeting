@@ -29,7 +29,6 @@
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
-    .conflict { background:#ffe6e6; }
     .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(5,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
     .day-header, .time-cell, .slot { background:#fff; display:flex; align-items:center; justify-content:center; }
     .day-header { background:#f3f6fb; font-weight:700; }
@@ -130,17 +129,6 @@
     <tbody><tr><td colspan="7" class="muted">尚無預約</td></tr></tbody>
   </table>
 
-  <details id="pastSection">
-    <summary>過往會議</summary>
-    <table id="pastTable">
-      <thead>
-        <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th></tr>
-      </thead>
-      <tbody><tr><td colspan="5" class="muted">尚無資料</td></tr></tbody>
-    </table>
-    <div style="text-align:center;"><button id="clearPastBtn" class="btn btn-secondary">清除過往會議</button></div>
-  </details>
-
   <div id="weekView"></div>
 
   <!-- 日曆覆蓋層 -->
@@ -182,22 +170,18 @@
         if(!r.ok) throw new Error('fail');
       }
     async function deleteBooking(idx){ await fetch(`/api/bookings/${idx}`,{method:'DELETE'}); }
-    async function clearPast(){ await fetch('/api/past',{method:'DELETE'}); }
     function hasConflict(bs, nb){ return bs.some(b=>
       b.office===nb.office && b.room===nb.room && b.date===nb.date &&
       !(nb.endTime<=b.startTime||nb.startTime>=b.endTime)
     ); }
-    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), pastBody=document.querySelector('#pastTable tbody');
-      const bs = await loadBookings();
-      const past = await loadPast();
+    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), bs=await loadBookings();
       const office=document.getElementById('office').value;
       const now=new Date(); const day=now.getDay();
       const monday=new Date(now); monday.setDate(now.getDate()-((day+6)%7));
       const end=new Date(monday); end.setDate(monday.getDate()+11);
       const startStr=monday.toISOString().slice(0,10), endStr=end.toISOString().slice(0,10);
       const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office && e.b.date>=startStr && e.b.date<=endStr);
-      const pastList=past.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="7" class="muted">尚無預約</td></tr>'; } else {
+      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="6" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         const conflicts=new Set();
         for(let i=0;i<upcoming.length;i++){
@@ -211,14 +195,7 @@
         tbody.innerHTML=upcoming.map((e,idx)=>`<tr${conflicts.has(idx)?' class="conflict"':''}>
           <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
           <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
-          <td>${conflicts.has(idx)?'衝突':''}</td>
           <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
-        </tr>`).join(''); }
-      if(!pastList.length){ pastBody.innerHTML='<tr><td colspan="5" class="muted">尚無資料</td></tr>'; } else {
-        pastList.sort((a,b)=>b.b.date.localeCompare(a.b.date)||b.b.startTime.localeCompare(a.b.startTime));
-        pastBody.innerHTML=pastList.map(e=>`<tr>
-          <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
-          <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
         </tr>`).join(''); }
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',async()=>{
         if(!confirm('確定刪除？')) return;
@@ -382,11 +359,6 @@
     document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
     document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
     document.getElementById('startTime').addEventListener('change',autoFillEnd);
-    document.getElementById('clearPastBtn').addEventListener('click',async()=>{
-      if(!confirm('確定清除過往會議？')) return;
-      await clearPast();
-      await renderTables();
-    });
 
     // 日期／時間選擇器共用
     const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
