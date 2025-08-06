@@ -19,10 +19,14 @@ function writeData(data) {
 }
 
 function archivePast(data) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((day + 6) % 7));
+  const weekStart = monday.toISOString().slice(0, 10);
   const upcoming = [];
   data.bookings.forEach(b => {
-    if (b.date < today) data.past.push(b);
+    if (b.date < weekStart) data.past.push(b);
     else upcoming.push(b);
   });
   data.bookings = upcoming;
@@ -62,13 +66,6 @@ const server = http.createServer((req, res) => {
       try {
         const booking = JSON.parse(body || '{}');
         const data = readData();
-        const conflict = data.bookings.some(b =>
-          b.office === booking.office &&
-          b.room === booking.room &&
-          b.date === booking.date &&
-          !(booking.endTime <= b.startTime || booking.startTime >= b.endTime)
-        );
-        if (conflict) return sendJSON(res, 400, { error: 'Conflict' });
         data.bookings.push(booking);
         writeData(data);
         return sendJSON(res, 201, booking);
@@ -76,6 +73,14 @@ const server = http.createServer((req, res) => {
         return sendJSON(res, 400, { error: 'Bad JSON' });
       }
     });
+    return;
+  }
+
+  if (req.method === 'DELETE' && parsed.pathname === '/api/past') {
+    const data = readData();
+    data.past = [];
+    writeData(data);
+    res.writeHead(204).end();
     return;
   }
 
