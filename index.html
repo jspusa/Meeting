@@ -19,19 +19,17 @@
     .input-group input { flex: 1; padding-right: 44px; }
     .picker-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border:1px solid #cfe0ff; background:#eef4ff; color:#2d5bd1; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:14px; line-height:1; }
     .picker-btn:hover { background: #dfeaff; }
-    .btn, .duration-btn { display: inline-block; padding: 8px 12px; font-size: 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 6px; margin-top: 4px; }
+    .btn { display: inline-block; padding: 8px 12px; font-size: 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 6px; margin-top: 4px; }
     .btn-primary { background: var(--primary); color: #fff; }
     .btn-primary:hover { background: #357abd; }
     .btn-secondary { background: #6c757d; color: #fff; }
     .btn-secondary:hover { background: #5b636a; }
-    .duration-btn { background: #eef4ff; color: #2d5bd1; border:1px solid #cfe0ff; }
-    .duration-btn:hover { background: #dfeaff; }
     .error { color: #e74c3c; font-weight: 700; text-align: center; margin-top: 6px; }
     .status { color: #2d5bd1; font-weight: 700; text-align: center; margin-top: 6px; }
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
-    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(7,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
+    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(5,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
     .day-header, .time-cell, .slot { background:#fff; display:flex; align-items:center; justify-content:center; }
     .day-header { background:#f3f6fb; font-weight:700; }
     .time-cell { background:#f3f6fb; justify-content:flex-end; padding-right:8px; font-weight:400; }
@@ -114,14 +112,6 @@
         <div class="input-group">
           <input type="text" id="endTime" placeholder="HH:MM">
           <button type="button" class="picker-btn time-picker-btn" data-target="endTime">⏰</button>
-        </div>
-        <div>
-          <button type="button" class="duration-btn" data-minutes="15">15分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="30">30分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="45">45分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="60">60分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="90">90分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="120">120分鐘</button>
         </div>
       </div>
       <div class="field">
@@ -266,13 +256,21 @@
       }
     }
 
+    function autoFillEnd(){
+      const start=document.getElementById('startTime').value;
+      if(!/^\d{2}:\d{2}$/.test(start)) return;
+      const [hh,mm]=start.split(':').map(Number);
+      const d=new Date(); d.setHours(hh); d.setMinutes(mm+30);
+      document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
     async function renderWeekView(){
       const wrap=document.getElementById('weekView');
       const office=document.getElementById('office').value;
       const room=document.getElementById('room').value;
       const bs=(await loadBookings()).filter(b=>b.office===office && b.room===room);
       const pad=n=>String(n).padStart(2,'0');
-      const days=['週一','週二','週三','週四','週五','週六','週日'];
+      const days=['週一','週二','週三','週四','週五'];
       const now=new Date();
       const day=now.getDay();
       const monday=new Date(now);
@@ -289,7 +287,7 @@
         // 左上空白
         table.appendChild(document.createElement('div'));
         // 星期標題
-        for(let d=0;d<7;d++){
+        for(let d=0;d<5;d++){
           const date=new Date(start); date.setDate(start.getDate()+d);
           const head=document.createElement('div');
           head.className='day-header';
@@ -297,14 +295,15 @@
           table.appendChild(head);
         }
         // 時間與時段格
-        for(let t=0;t<=20;t++){
-          const hh=8+Math.floor(t/2); const mm=t%2?30:0;
+        for(let t=0;t<20;t++){
+          const mins=8*60+30+t*30;
+          const hh=Math.floor(mins/60); const mm=mins%60;
           const timeStr=`${pad(hh)}:${pad(mm)}`;
           const timeCell=document.createElement('div');
           timeCell.className='time-cell';
           timeCell.textContent=timeStr;
           table.appendChild(timeCell);
-          for(let d=0;d<7;d++){
+          for(let d=0;d<5;d++){
             const date=new Date(start); date.setDate(start.getDate()+d);
             const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
             const cell=document.createElement('div');
@@ -344,9 +343,10 @@
         const org=form.organizer.value.trim();
         if(!office||!room||!subject||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||!org){
           err.textContent='請完整且正確填寫所有欄位。'; return; }
-        const sh=+start.slice(0,2), eh=+end.slice(0,2);
-        if(sh<8||sh>18||eh<8||eh>18){ err.textContent='時間需在08:00-18:59之間。'; return; }
-        if(end<=start){ err.textContent='結束時間需晚於開始時間。'; return; }
+        const [sh,sm]=start.split(':').map(Number), [eh,em]=end.split(':').map(Number);
+        const sMin=sh*60+sm, eMin=eh*60+em;
+        if(sMin<510||eMin>1080){ err.textContent='時間需在08:30-18:00之間。'; return; }
+        if(eMin<=sMin){ err.textContent='結束時間需晚於開始時間。'; return; }
         const nb={office,room,date,startTime:start,endTime:end,subject,organizer:org}, bs=await loadBookings();
         if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
         status.textContent='已提交預約，請稍候系統上傳';
@@ -361,6 +361,7 @@
     document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); renderWeekView(); });
     document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
     document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
+    document.getElementById('startTime').addEventListener('change',autoFillEnd);
     document.getElementById('pastToggle').addEventListener('click',()=>{
       const box=document.getElementById('pastContent');
       box.style.display=box.style.display==='none'?'block':'none';
@@ -398,7 +399,7 @@
     function openTime(id){ activeTimeInput=document.getElementById(id); const v=activeTimeInput.value.match(/^(\d{2}):(\d{2})$/);
       if(v){ hourSel.value=v[1]; const m=+v[2]; minTenSel.value=Math.floor(m/10); minOneSel.value=m%10;} timeOverlay.style.display='flex'; }
     function closeTime(){ timeOverlay.style.display='none'; activeTimeInput=null; }
-    function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; }
+    function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; if(activeTimeInput.id==='startTime') autoFillEnd(); }
     timeOverlay.addEventListener('click',e=>{ if(e.target===timeOverlay) closeTime(); });
     hourSel.addEventListener('change',updateTime); minTenSel.addEventListener('change',updateTime); minOneSel.addEventListener('change',()=>{ updateTime(); closeTime(); });
     subjectOverlay.addEventListener('click',e=>{ if(e.target===subjectOverlay) subjectOverlay.style.display='none'; });
@@ -407,13 +408,6 @@
     document.querySelectorAll('.date-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openCalendar(btn.dataset.target)));
     document.querySelectorAll('.time-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openTime(btn.dataset.target)));
     document.querySelectorAll('.subject-picker-btn').forEach(btn=>btn.addEventListener('click',()=>{ subjectOverlay.style.display='flex'; }));
-    // 快選時長
-    document.querySelectorAll('.duration-btn').forEach(btn=>btn.addEventListener('click',()=>{
-      const mins=+btn.dataset.minutes; const start=document.getElementById('startTime').value;
-      if(!/^\d{2}:\d{2}$/.test(start)) return; const [hh,mm]=start.split(':').map(n=>+n);
-      const d=new Date(); d.setHours(hh); d.setMinutes(mm+mins);
-      document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    }));
     renderTables();
     renderWeekView();
   })();
