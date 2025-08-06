@@ -36,9 +36,7 @@
     .slot { font-size:12px; cursor:pointer; }
     .booked { background: var(--primary); color:#fff; cursor:default; }
     .selected { background:#b3d4fc; }
-    .legend { max-width:900px; margin:8px auto; display:flex; align-items:center; gap:12px; font-size:14px; }
-    .legend-item { display:flex; align-items:center; gap:4px; }
-    .legend-box { width:12px; height:12px; border:1px solid #e6e6e6; }
+    .lunch { background:#f0f0f0; }
     .cal-overlay, .time-overlay, .subject-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel, .subject-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
     .subject-panel button { display:block; width:100%; margin:4px 0; padding:8px 12px; border:1px solid #cfe0ff; border-radius:6px; background:#eef4ff; color:#2d5bd1; font-size:16px; cursor:pointer; }
@@ -56,8 +54,6 @@
     .time-panel { display: flex; gap: 8px; justify-content: center; }
     .time-panel select { padding: 8px 6px; font-size: 16px; }
     .time-panel span { display: flex; align-items: center; font-size: 16px; }
-    .past-box { position: fixed; right: 20px; bottom: 20px; width: 320px; }
-    .past-box table { margin-top:0; width:100%; }
     @media (max-width: 760px) { .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -133,17 +129,7 @@
     <tbody><tr><td colspan="7" class="muted">尚無預約</td></tr></tbody>
   </table>
 
-  <div class="past-box" id="pastBox">
-    <button type="button" id="pastToggle" class="btn btn-secondary" style="width:100%;">過往會議</button>
-    <div id="pastContent" style="display:none; margin-top:8px;">
-      <table id="pastTable">
-        <thead>
-          <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
-        </thead>
-        <tbody><tr><td colspan="6" class="muted">無過往會議</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+  <div id="weekView"></div>
 
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
@@ -179,20 +165,22 @@
   (function(){
     // 資料存取
       async function loadBookings(){ const r=await fetch('/api/bookings'); return await r.json(); }
-      async function loadPast(){ const r=await fetch('/api/past'); return await r.json(); }
       async function createBooking(nb){
         const r=await fetch('/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(nb)});
         if(!r.ok) throw new Error('fail');
       }
-    async function deleteBooking(type,idx){ const p=type==='upcoming'?'bookings':'past'; await fetch(`/api/${p}/${idx}`,{method:'DELETE'}); }
+    async function deleteBooking(idx){ await fetch(`/api/bookings/${idx}`,{method:'DELETE'}); }
     function hasConflict(bs, nb){ return bs.some(b=>
       b.office===nb.office && b.room===nb.room && b.date===nb.date &&
       !(nb.endTime<=b.startTime||nb.startTime>=b.endTime)
     ); }
-    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), pastTbody=document.querySelector('#pastTable tbody'), bs=await loadBookings(), pastBs=await loadPast();
+    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), bs=await loadBookings();
       const office=document.getElementById('office').value;
-      const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      const past=pastBs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
+      const now=new Date(); const day=now.getDay();
+      const monday=new Date(now); monday.setDate(now.getDate()-((day+6)%7));
+      const end=new Date(monday); end.setDate(monday.getDate()+11);
+      const startStr=monday.toISOString().slice(0,10), endStr=end.toISOString().slice(0,10);
+      const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office && e.b.date>=startStr && e.b.date<=endStr);
       if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="6" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
         const conflicts=new Set();
@@ -207,18 +195,11 @@
         tbody.innerHTML=upcoming.map((e,idx)=>`<tr${conflicts.has(idx)?' class="conflict"':''}>
           <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
           <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-type="upcoming" data-idx="${e.i}">刪除</button></td>
-        </tr>`).join(''); }
-      if(!past.length){ pastTbody.innerHTML='<tr><td colspan="6" class="muted">無過往會議</td></tr>'; } else {
-        past.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
-        pastTbody.innerHTML=past.map(e=>`<tr>
-          <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
-          <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-type="past" data-idx="${e.i}">刪除</button></td>
+          <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',async()=>{
         if(!confirm('確定刪除？')) return;
-        await deleteBooking(btn.dataset.type,+btn.dataset.idx);
+        await deleteBooking(+btn.dataset.idx);
         await renderTables();
         await renderWeekView();
       })); }
@@ -266,6 +247,15 @@
       document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }
 
+    function nextWeekday(dow){
+      const now=new Date();
+      const diff=(dow+7-now.getDay())%7;
+      const target=new Date(now);
+      target.setDate(now.getDate()+diff);
+      const pad=n=>String(n).padStart(2,'0');
+      return `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}`;
+    }
+
     async function renderWeekView(){
       const wrap=document.getElementById('weekView');
       const office=document.getElementById('office').value;
@@ -303,13 +293,14 @@
           const timeStr=`${pad(hh)}:${pad(mm)}`;
           const timeCell=document.createElement('div');
           timeCell.className='time-cell';
+          if(timeStr==='12:30'||timeStr==='13:00') timeCell.classList.add('lunch');
           timeCell.textContent=timeStr;
           table.appendChild(timeCell);
           for(let d=0;d<5;d++){
             const date=new Date(start); date.setDate(start.getDate()+d);
             const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
             const cell=document.createElement('div');
-            cell.className='slot';
+            cell.className='slot'+(timeStr==='12:30'||timeStr==='13:00'?' lunch':'');
             cell.dataset.date=dateStr;
             cell.dataset.time=timeStr;
             cell.addEventListener('click',()=>handleSlotClick(cell));
@@ -345,6 +336,8 @@
         const org=form.organizer.value.trim();
         if(!office||!room||!subject||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||!org){
           err.textContent='請完整且正確填寫所有欄位。'; return; }
+        const todayStr=minDate.toISOString().slice(0,10), maxStr=maxDate.toISOString().slice(0,10);
+        if(date<todayStr||date>maxStr){ err.textContent='日期需在30天內。'; return; }
         const [sh,sm]=start.split(':').map(Number), [eh,em]=end.split(':').map(Number);
         const sMin=sh*60+sm, eMin=eh*60+em;
         if(sMin<510||eMin>1080){ err.textContent='時間需在08:30-18:00之間。'; return; }
@@ -366,16 +359,17 @@
     document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
     document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
     document.getElementById('startTime').addEventListener('change',autoFillEnd);
-    document.getElementById('pastToggle').addEventListener('click',()=>{
-      const box=document.getElementById('pastContent');
-      box.style.display=box.style.display==='none'?'block':'none';
-    });
 
     // 日期／時間選擇器共用
     const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
     const timeOverlay=document.getElementById('timeOverlay'), hourSel=document.getElementById('hourSel'), minTenSel=document.getElementById('minTenSel'), minOneSel=document.getElementById('minOneSel');
     const subjectOverlay=document.getElementById('subjectOverlay');
     let activeDateInput=null, activeTimeInput=null, viewY, viewM;
+    const today=new Date();
+    const minDate=new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const maxDate=new Date(minDate); maxDate.setDate(maxDate.getDate()+30);
+    const minYM=minDate.getFullYear()*12+minDate.getMonth();
+    const maxYM=maxDate.getFullYear()*12+maxDate.getMonth();
     // 初始化時間下拉
       function buildTime(){
         const hours=Array.from({length:11},(_,i)=>String(i+8).padStart(2,'0'));
@@ -385,19 +379,24 @@
     buildTime();
     // 打開日曆
     function openCalendar(id){ activeDateInput=document.getElementById(id);
-      const v=activeDateInput.value.match(/^(\d{4})-(\d{2})/), now=v?new Date(+v[1],+v[2]-1,1):new Date(); viewY=now.getFullYear(); viewM=now.getMonth(); renderCal(); calOverlay.style.display='flex'; }
+      const v=activeDateInput.value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      let now=v?new Date(+v[1],+v[2]-1,+v[3]):new Date();
+      if(now<minDate) now=minDate;
+      if(now>maxDate) now=maxDate;
+      viewY=now.getFullYear(); viewM=now.getMonth(); renderCal(); calOverlay.style.display='flex'; }
     function closeCalendar(){ calOverlay.style.display='none'; activeDateInput=null; }
     function renderCal(){ const pad=n=>String(n).padStart(2,'0'); titleEl.textContent=`${viewY}-${pad(viewM+1)}`;
       const first=new Date(viewY,viewM,1), last=new Date(viewY,viewM+1,0), startDow=first.getDay(), days=last.getDate();
       let html=['日','一','二','三','四','五','六'].map(w=>`<div class="dow">${w}</div>`).join('');
       for(let i=0;i<startDow;i++) html+=`<div class="disabled"></div>`;
-      for(let d=1;d<=days;d++) html+=`<div class="day" data-day="${d}">${d}</div>`;
+      for(let d=1;d<=days;d++){ const date=new Date(viewY,viewM,d); const dis=date<minDate||date>maxDate; html+=`<div class="day${dis?' disabled':''}" data-day="${d}">${d}</div>`; }
       grid.innerHTML=html;
-      document.querySelectorAll('.day').forEach(cell=>cell.addEventListener('click',()=>{
-        const d=+cell.dataset.day; activeDateInput.value=`${viewY}-${pad(viewM+1)}-${pad(d)}`; closeCalendar();
-      })); }
-    prevBtn.addEventListener('click',()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
-    nextBtn.addEventListener('click',()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
+      document.querySelectorAll('.day').forEach(cell=>{ if(cell.classList.contains('disabled')) return; cell.addEventListener('click',()=>{ const d=+cell.dataset.day; activeDateInput.value=`${viewY}-${pad(viewM+1)}-${pad(d)}`; closeCalendar(); }); });
+      prevBtn.disabled=(viewY*12+viewM)<=minYM;
+      nextBtn.disabled=(viewY*12+viewM)>=maxYM;
+    }
+    prevBtn.addEventListener('click',()=>{ if(prevBtn.disabled) return; viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
+    nextBtn.addEventListener('click',()=>{ if(nextBtn.disabled) return; viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
     calOverlay.addEventListener('click',e=>{ if(e.target===calOverlay) closeCalendar(); });
     // 打開時間選擇器
     function openTime(id){ activeTimeInput=document.getElementById(id); const v=activeTimeInput.value.match(/^(\d{2}):(\d{2})$/);
@@ -407,7 +406,20 @@
     timeOverlay.addEventListener('click',e=>{ if(e.target===timeOverlay) closeTime(); });
     hourSel.addEventListener('change',updateTime); minTenSel.addEventListener('change',updateTime); minOneSel.addEventListener('change',()=>{ updateTime(); closeTime(); });
     subjectOverlay.addEventListener('click',e=>{ if(e.target===subjectOverlay) subjectOverlay.style.display='none'; });
-    subjectOverlay.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{ document.getElementById('subject').value=btn.dataset.subject; subjectOverlay.style.display='none'; }));
+    subjectOverlay.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+      const subj=btn.dataset.subject;
+      document.getElementById('subject').value=subj;
+      if(subj==='行銷週會'){
+        document.getElementById('date').value=nextWeekday(5);
+        document.getElementById('startTime').value='10:30';
+        document.getElementById('endTime').value='12:30';
+      }else if(subj==='AMZ補貨會議'){
+        document.getElementById('date').value=nextWeekday(1);
+        document.getElementById('startTime').value='14:30';
+        document.getElementById('endTime').value='15:30';
+      }
+      subjectOverlay.style.display='none';
+    }));
     // 綁定按鈕
     document.querySelectorAll('.date-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openCalendar(btn.dataset.target)));
     document.querySelectorAll('.time-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openTime(btn.dataset.target)));
