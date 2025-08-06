@@ -124,9 +124,9 @@
   </form>
   <table id="bookingTable">
     <thead>
-      <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
+      <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>狀態</th><th>操作</th></tr>
     </thead>
-    <tbody><tr><td colspan="6" class="muted">尚無預約</td></tr></tbody>
+    <tbody><tr><td colspan="7" class="muted">尚無預約</td></tr></tbody>
   </table>
 
   <div id="weekView"></div>
@@ -183,7 +183,16 @@
       const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office && e.b.date>=startStr && e.b.date<=endStr);
       if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="6" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
-        tbody.innerHTML=upcoming.map(e=>`<tr>
+        const conflicts=new Set();
+        for(let i=0;i<upcoming.length;i++){
+          for(let j=i+1;j<upcoming.length;j++){
+            const a=upcoming[i].b, b=upcoming[j].b;
+            if(a.room===b.room && a.date===b.date && !(a.endTime<=b.startTime||a.startTime>=b.endTime)){
+              conflicts.add(i); conflicts.add(j);
+            }
+          }
+        }
+        tbody.innerHTML=upcoming.map((e,idx)=>`<tr${conflicts.has(idx)?' class="conflict"':''}>
           <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
           <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
           <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
@@ -334,7 +343,9 @@
         if(sMin<510||eMin>1080){ err.textContent='時間需在08:30-18:00之間。'; return; }
         if(eMin<=sMin){ err.textContent='結束時間需晚於開始時間。'; return; }
         const nb={office,room,date,startTime:start,endTime:end,subject,organizer:org}, bs=await loadBookings();
-        if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
+        if(hasConflict(bs,nb)){
+          if(!confirm('此時段與現有預約衝突，仍要預約？')) return;
+        }
         status.textContent='已提交預約，請稍候系統上傳';
         try{ await createBooking(nb); } catch(e){ status.textContent=''; err.textContent='提交失敗，請稍後再試。'; return; }
         const keepOffice=form.office.value;
