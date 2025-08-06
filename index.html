@@ -19,18 +19,29 @@
     .input-group input { flex: 1; padding-right: 44px; }
     .picker-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border:1px solid #cfe0ff; background:#eef4ff; color:#2d5bd1; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:14px; line-height:1; }
     .picker-btn:hover { background: #dfeaff; }
-    .btn, .duration-btn { display: inline-block; padding: 8px 12px; font-size: 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 6px; margin-top: 4px; }
+    .btn { display: inline-block; padding: 8px 12px; font-size: 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 6px; margin-top: 4px; }
     .btn-primary { background: var(--primary); color: #fff; }
     .btn-primary:hover { background: #357abd; }
     .btn-secondary { background: #6c757d; color: #fff; }
     .btn-secondary:hover { background: #5b636a; }
-    .duration-btn { background: #eef4ff; color: #2d5bd1; border:1px solid #cfe0ff; }
-    .duration-btn:hover { background: #dfeaff; }
     .error { color: #e74c3c; font-weight: 700; text-align: center; margin-top: 6px; }
     .status { color: #2d5bd1; font-weight: 700; text-align: center; margin-top: 6px; }
     table { width:100%; max-width:900px; border-collapse:collapse; margin:16px auto; background:#fff; border-radius:var(--radius); overflow:hidden; }
     th, td { border:1px solid #e6e6e6; padding:8px 12px; text-align:center; font-size:.95em; }
     th { background: #f3f6fb; }
+    .conflict { background:#ffe6e6; }
+    .timetable { width:100%; max-width:900px; margin:16px auto; display:grid; grid-template-columns:60px repeat(5,1fr); grid-auto-rows:30px; gap:1px; background:#e6e6e6; border-radius:var(--radius); overflow:hidden; }
+    .day-header, .time-cell, .slot { background:#fff; display:flex; align-items:center; justify-content:center; }
+    .day-header { background:#f3f6fb; font-weight:700; }
+    .time-cell { background:#f3f6fb; justify-content:flex-end; padding-right:8px; font-weight:400; }
+    .slot { font-size:12px; cursor:pointer; }
+    .booked { background: var(--primary); color:#fff; cursor:default; }
+    .selected { background:#b3d4fc; }
+    .lunch { background:#f0f0f0; }
+    .cal-overlay, .time-overlay, .subject-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
+    .cal-panel, .time-panel, .subject-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
+    .subject-panel button { display:block; width:100%; margin:4px 0; padding:8px 12px; border:1px solid #cfe0ff; border-radius:6px; background:#eef4ff; color:#2d5bd1; font-size:16px; cursor:pointer; }
+    .subject-panel button:hover { background:#dfeaff; }
     .cal-overlay, .time-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.2); align-items: center; justify-content: center; z-index: 1000; }
     .cal-panel, .time-panel { background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.25); padding: 12px; }
     .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -44,8 +55,6 @@
     .time-panel { display: flex; gap: 8px; justify-content: center; }
     .time-panel select { padding: 8px 6px; font-size: 16px; }
     .time-panel span { display: flex; align-items: center; font-size: 16px; }
-    .past-box { position: fixed; right: 20px; bottom: 20px; width: 320px; }
-    .past-box table { margin-top:0; width:100%; }
     @media (max-width: 760px) { .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -71,7 +80,10 @@
     <div class="row-2">
       <div class="field">
         <div class="label">會議主題</div>
-        <input type="text" id="subject" placeholder="輸入會議主題">
+        <div class="input-group">
+          <input type="text" id="subject" placeholder="輸入會議主題">
+          <button type="button" class="picker-btn subject-picker-btn" data-target="subject">📖</button>
+        </div>
       </div>
       <div></div>
     </div>
@@ -98,14 +110,6 @@
           <input type="text" id="endTime" placeholder="HH:MM">
           <button type="button" class="picker-btn time-picker-btn" data-target="endTime">⏰</button>
         </div>
-        <div>
-          <button type="button" class="duration-btn" data-minutes="15">15分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="30">30分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="45">45分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="60">60分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="90">90分鐘</button>
-          <button type="button" class="duration-btn" data-minutes="120">120分鐘</button>
-        </div>
       </div>
       <div class="field">
         <div class="label">預約人</div>
@@ -121,22 +125,23 @@
   </form>
   <table id="bookingTable">
     <thead>
-      <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
+      <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>狀態</th><th>操作</th></tr>
     </thead>
-    <tbody><tr><td colspan="6" class="muted">尚無預約</td></tr></tbody>
+    <tbody><tr><td colspan="7" class="muted">尚無預約</td></tr></tbody>
   </table>
 
-  <div class="past-box" id="pastBox">
-    <button type="button" id="pastToggle" class="btn btn-secondary" style="width:100%;">過往會議</button>
-    <div id="pastContent" style="display:none; margin-top:8px;">
-      <table id="pastTable">
-        <thead>
-          <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th><th>操作</th></tr>
-        </thead>
-        <tbody><tr><td colspan="6" class="muted">無過往會議</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+  <details id="pastSection">
+    <summary>過往會議</summary>
+    <table id="pastTable">
+      <thead>
+        <tr><th>日期</th><th>會議室</th><th>主題</th><th>時間</th><th>預約人</th></tr>
+      </thead>
+      <tbody><tr><td colspan="5" class="muted">尚無資料</td></tr></tbody>
+    </table>
+    <div style="text-align:center;"><button id="clearPastBtn" class="btn btn-secondary">清除過往會議</button></div>
+  </details>
+
+  <div id="weekView"></div>
 
   <!-- 日曆覆蓋層 -->
   <div class="cal-overlay" id="calOverlay">
@@ -159,6 +164,15 @@
     </div>
   </div>
 
+  <!-- 主題快速選擇覆蓋層 -->
+  <div class="subject-overlay" id="subjectOverlay">
+    <div class="subject-panel">
+      <button type="button" data-subject="行銷週會">行銷週會</button>
+      <button type="button" data-subject="產銷會議">產銷會議</button>
+      <button type="button" data-subject="AMZ補貨會議">AMZ補貨會議</button>
+    </div>
+  </div>
+
   <script>
   (function(){
     // 資料存取
@@ -168,34 +182,175 @@
         const r=await fetch('/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(nb)});
         if(!r.ok) throw new Error('fail');
       }
-    async function deleteBooking(type,idx){ const p=type==='upcoming'?'bookings':'past'; await fetch(`/api/${p}/${idx}`,{method:'DELETE'}); }
+    async function deleteBooking(idx){ await fetch(`/api/bookings/${idx}`,{method:'DELETE'}); }
+    async function clearPast(){ await fetch('/api/past',{method:'DELETE'}); }
     function hasConflict(bs, nb){ return bs.some(b=>
       b.office===nb.office && b.room===nb.room && b.date===nb.date &&
       !(nb.endTime<=b.startTime||nb.startTime>=b.endTime)
     ); }
-    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), pastTbody=document.querySelector('#pastTable tbody'), bs=await loadBookings(), pastBs=await loadPast();
+    async function renderTables(){ const tbody=document.querySelector('#bookingTable tbody'), pastBody=document.querySelector('#pastTable tbody');
+      const bs = await loadBookings();
+      const past = await loadPast();
       const office=document.getElementById('office').value;
-      const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      const past=pastBs.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
-      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="6" class="muted">尚無預約</td></tr>'; } else {
+      const now=new Date(); const day=now.getDay();
+      const monday=new Date(now); monday.setDate(now.getDate()-((day+6)%7));
+      const end=new Date(monday); end.setDate(monday.getDate()+11);
+      const startStr=monday.toISOString().slice(0,10), endStr=end.toISOString().slice(0,10);
+      const upcoming=bs.map((b,i)=>({b,i})).filter(e=>e.b.office===office && e.b.date>=startStr && e.b.date<=endStr);
+      const pastList=past.map((b,i)=>({b,i})).filter(e=>e.b.office===office);
+      if(!upcoming.length){ tbody.innerHTML='<tr><td colspan="7" class="muted">尚無預約</td></tr>'; } else {
         upcoming.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
-        tbody.innerHTML=upcoming.map(e=>`<tr>
+        const conflicts=new Set();
+        for(let i=0;i<upcoming.length;i++){
+          for(let j=i+1;j<upcoming.length;j++){
+            const a=upcoming[i].b, b=upcoming[j].b;
+            if(a.room===b.room && a.date===b.date && !(a.endTime<=b.startTime||a.startTime>=b.endTime)){
+              conflicts.add(i); conflicts.add(j);
+            }
+          }
+        }
+        tbody.innerHTML=upcoming.map((e,idx)=>`<tr${conflicts.has(idx)?' class="conflict"':''}>
           <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
           <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-type="upcoming" data-idx="${e.i}">刪除</button></td>
+          <td>${conflicts.has(idx)?'衝突':''}</td>
+          <td><button class="del-btn" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
-      if(!past.length){ pastTbody.innerHTML='<tr><td colspan="6" class="muted">無過往會議</td></tr>'; } else {
-        past.sort((a,b)=>a.b.date.localeCompare(b.b.date)||a.b.startTime.localeCompare(b.b.startTime));
-        pastTbody.innerHTML=past.map(e=>`<tr>
+      if(!pastList.length){ pastBody.innerHTML='<tr><td colspan="5" class="muted">尚無資料</td></tr>'; } else {
+        pastList.sort((a,b)=>b.b.date.localeCompare(a.b.date)||b.b.startTime.localeCompare(a.b.startTime));
+        pastBody.innerHTML=pastList.map(e=>`<tr>
           <td>${e.b.date}</td><td>${e.b.room}</td><td>${e.b.subject}</td>
           <td>${e.b.startTime} - ${e.b.endTime}</td><td>${e.b.organizer}</td>
-          <td><button class="del-btn" data-type="past" data-idx="${e.i}">刪除</button></td>
         </tr>`).join(''); }
       document.querySelectorAll('.del-btn').forEach(btn=>btn.addEventListener('click',async()=>{
         if(!confirm('確定刪除？')) return;
-        await deleteBooking(btn.dataset.type,+btn.dataset.idx);
+        await deleteBooking(+btn.dataset.idx);
         await renderTables();
+        await renderWeekView();
       })); }
+
+    const presetColors={'行銷週會':'#2ecc71','產銷會議':'#e74c3c','AMZ補貨會議':'#e67e22'};
+    const extraColors=['#3498db','#9b59b6','#1abc9c','#f1c40f','#7f8c8d'];
+    const subjectColorMap={};
+    let extraIdx=0;
+    function colorForSubject(s){
+      if(presetColors[s]) return presetColors[s];
+      if(!subjectColorMap[s]){ subjectColorMap[s]=extraColors[extraIdx % extraColors.length]; extraIdx++; }
+      return subjectColorMap[s];
+    }
+    let selectedSlots=[];
+    function handleSlotClick(cell){
+      if(cell.classList.contains('booked')) return;
+      const date=cell.dataset.date;
+      if(selectedSlots.length && selectedSlots[0].dataset.date!==date){
+        selectedSlots.forEach(c=>c.classList.remove('selected'));
+        selectedSlots=[];
+      }
+      if(cell.classList.contains('selected')){
+        cell.classList.remove('selected');
+        selectedSlots=selectedSlots.filter(c=>c!==cell);
+      }else{
+        cell.classList.add('selected');
+        selectedSlots.push(cell);
+      }
+      if(selectedSlots.length){
+        const mins=selectedSlots.map(c=>{const [h,m]=c.dataset.time.split(':').map(Number);return h*60+m;});
+        const start=Math.min(...mins), end=Math.max(...mins)+30;
+        const startStr=`${String(Math.floor(start/60)).padStart(2,'0')}:${String(start%60).padStart(2,'0')}`;
+        const endStr=`${String(Math.floor(end/60)).padStart(2,'0')}:${String(end%60).padStart(2,'0')}`;
+        document.getElementById('date').value=date;
+        document.getElementById('startTime').value=startStr;
+        document.getElementById('endTime').value=endStr;
+      }
+    }
+
+    function autoFillEnd(){
+      const start=document.getElementById('startTime').value;
+      if(!/^\d{2}:\d{2}$/.test(start)) return;
+      const [hh,mm]=start.split(':').map(Number);
+      const d=new Date(); d.setHours(hh); d.setMinutes(mm+30);
+      document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function nextWeekday(dow){
+      const now=new Date();
+      const diff=(dow+7-now.getDay())%7;
+      const target=new Date(now);
+      target.setDate(now.getDate()+diff);
+      const pad=n=>String(n).padStart(2,'0');
+      return `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}`;
+    }
+
+    async function renderWeekView(){
+      const wrap=document.getElementById('weekView');
+      const office=document.getElementById('office').value;
+      const room=document.getElementById('room').value;
+      const bs=(await loadBookings()).filter(b=>b.office===office && b.room===room);
+      const pad=n=>String(n).padStart(2,'0');
+      const days=['週一','週二','週三','週四','週五'];
+      const now=new Date();
+      const day=now.getDay();
+      const monday=new Date(now);
+      monday.setDate(now.getDate()-((day+6)%7));
+      const next=new Date(monday); next.setDate(monday.getDate()+7);
+      wrap.innerHTML='';
+      selectedSlots=[];
+      [monday,next].forEach((start,idx)=>{
+        const title=document.createElement('h3');
+        title.textContent=idx===0?'本週':'下週';
+        wrap.appendChild(title);
+        const table=document.createElement('div');
+        table.className='timetable';
+        // 左上空白
+        table.appendChild(document.createElement('div'));
+        // 星期標題
+        for(let d=0;d<5;d++){
+          const date=new Date(start); date.setDate(start.getDate()+d);
+          const head=document.createElement('div');
+          head.className='day-header';
+          head.textContent=`${days[d]} ${pad(date.getMonth()+1)}/${pad(date.getDate())}`;
+          table.appendChild(head);
+        }
+        // 時間與時段格
+        for(let t=0;t<20;t++){
+          const mins=8*60+30+t*30;
+          const hh=Math.floor(mins/60); const mm=mins%60;
+          const timeStr=`${pad(hh)}:${pad(mm)}`;
+          const timeCell=document.createElement('div');
+          timeCell.className='time-cell';
+          if(timeStr==='12:30'||timeStr==='13:00') timeCell.classList.add('lunch');
+          timeCell.textContent=timeStr;
+          table.appendChild(timeCell);
+          for(let d=0;d<5;d++){
+            const date=new Date(start); date.setDate(start.getDate()+d);
+            const dateStr=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+            const cell=document.createElement('div');
+            cell.className='slot'+(timeStr==='12:30'||timeStr==='13:00'?' lunch':'');
+            cell.dataset.date=dateStr;
+            cell.dataset.time=timeStr;
+            cell.addEventListener('click',()=>handleSlotClick(cell));
+            table.appendChild(cell);
+          }
+        }
+        // 標記預約
+        bs.forEach(b=>{
+          const [sh,sm]=b.startTime.split(':').map(Number);
+          const [eh,em]=b.endTime.split(':').map(Number);
+          const sMin=sh*60+sm, eMin=eh*60+em;
+          table.querySelectorAll(`.slot[data-date="${b.date}"]`).forEach(cell=>{
+            const [ch,cm]=cell.dataset.time.split(':').map(Number);
+            const cMin=ch*60+cm;
+            if(cMin<eMin && cMin+30>sMin){
+              cell.classList.add('booked');
+              const color=colorForSubject(b.subject);
+              cell.style.background=color;
+              cell.style.color='#fff';
+              cell.textContent=b.subject;
+            }
+          });
+        });
+        wrap.appendChild(table);
+      });
+    }
 
     // 表單事件
     const form=document.getElementById('bookingForm'), err=document.getElementById('errorMsg'), status=document.getElementById('statusMsg');
@@ -205,30 +360,45 @@
         const org=form.organizer.value.trim();
         if(!office||!room||!subject||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end)||!org){
           err.textContent='請完整且正確填寫所有欄位。'; return; }
-        const sh=+start.slice(0,2), eh=+end.slice(0,2);
-        if(sh<8||sh>18||eh<8||eh>18){ err.textContent='時間需在08:00-18:59之間。'; return; }
-        if(end<=start){ err.textContent='結束時間需晚於開始時間。'; return; }
+        const todayStr=minDate.toISOString().slice(0,10), maxStr=maxDate.toISOString().slice(0,10);
+        if(date<todayStr||date>maxStr){ err.textContent='日期需在30天內。'; return; }
+        const [sh,sm]=start.split(':').map(Number), [eh,em]=end.split(':').map(Number);
+        const sMin=sh*60+sm, eMin=eh*60+em;
+        if(sMin<510||eMin>1080){ err.textContent='時間需在08:30-18:00之間。'; return; }
+        if(eMin<=sMin){ err.textContent='結束時間需晚於開始時間。'; return; }
         const nb={office,room,date,startTime:start,endTime:end,subject,organizer:org}, bs=await loadBookings();
-        if(hasConflict(bs,nb)){ err.textContent='此時段已被預約，請選其他時間或會議室。'; return; }
+        if(hasConflict(bs,nb)){
+          if(!confirm('此時段與現有預約衝突，仍要預約？')) return;
+        }
         status.textContent='已提交預約，請稍候系統上傳';
         try{ await createBooking(nb); } catch(e){ status.textContent=''; err.textContent='提交失敗，請稍後再試。'; return; }
         const keepOffice=form.office.value;
         status.textContent='';
         await renderTables();
+        await renderWeekView();
         form.reset();
         form.office.value=keepOffice;
     });
-    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); });
-    document.getElementById('office').addEventListener('change',()=>{ renderTables(); });
-    document.getElementById('pastToggle').addEventListener('click',()=>{
-      const box=document.getElementById('pastContent');
-      box.style.display=box.style.display==='none'?'block':'none';
+    document.getElementById('resetBtn').addEventListener('click',()=>{ form.reset(); err.textContent=''; status.textContent=''; renderTables(); renderWeekView(); });
+    document.getElementById('office').addEventListener('change',()=>{ renderTables(); renderWeekView(); });
+    document.getElementById('room').addEventListener('change',()=>{ renderWeekView(); });
+    document.getElementById('startTime').addEventListener('change',autoFillEnd);
+    document.getElementById('clearPastBtn').addEventListener('click',async()=>{
+      if(!confirm('確定清除過往會議？')) return;
+      await clearPast();
+      await renderTables();
     });
 
     // 日期／時間選擇器共用
     const calOverlay=document.getElementById('calOverlay'), grid=document.getElementById('calGrid'), titleEl=document.getElementById('calTitle'), prevBtn=document.getElementById('calPrev'), nextBtn=document.getElementById('calNext');
     const timeOverlay=document.getElementById('timeOverlay'), hourSel=document.getElementById('hourSel'), minTenSel=document.getElementById('minTenSel'), minOneSel=document.getElementById('minOneSel');
+    const subjectOverlay=document.getElementById('subjectOverlay');
     let activeDateInput=null, activeTimeInput=null, viewY, viewM;
+    const today=new Date();
+    const minDate=new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const maxDate=new Date(minDate); maxDate.setDate(maxDate.getDate()+30);
+    const minYM=minDate.getFullYear()*12+minDate.getMonth();
+    const maxYM=maxDate.getFullYear()*12+maxDate.getMonth();
     // 初始化時間下拉
       function buildTime(){
         const hours=Array.from({length:11},(_,i)=>String(i+8).padStart(2,'0'));
@@ -238,38 +408,53 @@
     buildTime();
     // 打開日曆
     function openCalendar(id){ activeDateInput=document.getElementById(id);
-      const v=activeDateInput.value.match(/^(\d{4})-(\d{2})/), now=v?new Date(+v[1],+v[2]-1,1):new Date(); viewY=now.getFullYear(); viewM=now.getMonth(); renderCal(); calOverlay.style.display='flex'; }
+      const v=activeDateInput.value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      let now=v?new Date(+v[1],+v[2]-1,+v[3]):new Date();
+      if(now<minDate) now=minDate;
+      if(now>maxDate) now=maxDate;
+      viewY=now.getFullYear(); viewM=now.getMonth(); renderCal(); calOverlay.style.display='flex'; }
     function closeCalendar(){ calOverlay.style.display='none'; activeDateInput=null; }
     function renderCal(){ const pad=n=>String(n).padStart(2,'0'); titleEl.textContent=`${viewY}-${pad(viewM+1)}`;
       const first=new Date(viewY,viewM,1), last=new Date(viewY,viewM+1,0), startDow=first.getDay(), days=last.getDate();
       let html=['日','一','二','三','四','五','六'].map(w=>`<div class="dow">${w}</div>`).join('');
       for(let i=0;i<startDow;i++) html+=`<div class="disabled"></div>`;
-      for(let d=1;d<=days;d++) html+=`<div class="day" data-day="${d}">${d}</div>`;
+      for(let d=1;d<=days;d++){ const date=new Date(viewY,viewM,d); const dis=date<minDate||date>maxDate; html+=`<div class="day${dis?' disabled':''}" data-day="${d}">${d}</div>`; }
       grid.innerHTML=html;
-      document.querySelectorAll('.day').forEach(cell=>cell.addEventListener('click',()=>{
-        const d=+cell.dataset.day; activeDateInput.value=`${viewY}-${pad(viewM+1)}-${pad(d)}`; closeCalendar();
-      })); }
-    prevBtn.addEventListener('click',()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
-    nextBtn.addEventListener('click',()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
+      document.querySelectorAll('.day').forEach(cell=>{ if(cell.classList.contains('disabled')) return; cell.addEventListener('click',()=>{ const d=+cell.dataset.day; activeDateInput.value=`${viewY}-${pad(viewM+1)}-${pad(d)}`; closeCalendar(); }); });
+      prevBtn.disabled=(viewY*12+viewM)<=minYM;
+      nextBtn.disabled=(viewY*12+viewM)>=maxYM;
+    }
+    prevBtn.addEventListener('click',()=>{ if(prevBtn.disabled) return; viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
+    nextBtn.addEventListener('click',()=>{ if(nextBtn.disabled) return; viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
     calOverlay.addEventListener('click',e=>{ if(e.target===calOverlay) closeCalendar(); });
     // 打開時間選擇器
     function openTime(id){ activeTimeInput=document.getElementById(id); const v=activeTimeInput.value.match(/^(\d{2}):(\d{2})$/);
       if(v){ hourSel.value=v[1]; const m=+v[2]; minTenSel.value=Math.floor(m/10); minOneSel.value=m%10;} timeOverlay.style.display='flex'; }
     function closeTime(){ timeOverlay.style.display='none'; activeTimeInput=null; }
-    function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; }
+    function updateTime(){ if(!activeTimeInput) return; const hh=hourSel.value, mm=String(minTenSel.value*10+ +minOneSel.value).padStart(2,'0'); activeTimeInput.value=`${hh}:${mm}`; if(activeTimeInput.id==='startTime') autoFillEnd(); }
     timeOverlay.addEventListener('click',e=>{ if(e.target===timeOverlay) closeTime(); });
     hourSel.addEventListener('change',updateTime); minTenSel.addEventListener('change',updateTime); minOneSel.addEventListener('change',()=>{ updateTime(); closeTime(); });
+    subjectOverlay.addEventListener('click',e=>{ if(e.target===subjectOverlay) subjectOverlay.style.display='none'; });
+    subjectOverlay.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+      const subj=btn.dataset.subject;
+      document.getElementById('subject').value=subj;
+      if(subj==='行銷週會'){
+        document.getElementById('date').value=nextWeekday(5);
+        document.getElementById('startTime').value='10:30';
+        document.getElementById('endTime').value='12:30';
+      }else if(subj==='AMZ補貨會議'){
+        document.getElementById('date').value=nextWeekday(1);
+        document.getElementById('startTime').value='14:30';
+        document.getElementById('endTime').value='15:30';
+      }
+      subjectOverlay.style.display='none';
+    }));
     // 綁定按鈕
     document.querySelectorAll('.date-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openCalendar(btn.dataset.target)));
     document.querySelectorAll('.time-picker-btn').forEach(btn=>btn.addEventListener('click',()=>openTime(btn.dataset.target)));
-    // 快選時長
-    document.querySelectorAll('.duration-btn').forEach(btn=>btn.addEventListener('click',()=>{
-      const mins=+btn.dataset.minutes; const start=document.getElementById('startTime').value;
-      if(!/^\d{2}:\d{2}$/.test(start)) return; const [hh,mm]=start.split(':').map(n=>+n);
-      const d=new Date(); d.setHours(hh); d.setMinutes(mm+mins);
-      document.getElementById('endTime').value=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    }));
+    document.querySelectorAll('.subject-picker-btn').forEach(btn=>btn.addEventListener('click',()=>{ subjectOverlay.style.display='flex'; }));
     renderTables();
+    renderWeekView();
   })();
   </script>
 </body>
